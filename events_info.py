@@ -22,7 +22,10 @@ def guardar_eventos_en_csv(ruta_replay, archivo_csv):
         # Calcular el ID único de la repetición
         replay_id = calcular_hash_archivo(ruta_replay)
 
-        # Lista de tipos de eventos que queremos guardar
+        # Obtener los jugadores (asumiendo que hay exactamente 2 jugadores)
+        jugadores = {player.pid: player.name for player in replay.players if player.is_human}
+
+        # Lista de eventos a guardar (solo si son realizados por los jugadores)
         eventos_permitidos = {
             "CommandEvent", "SelectionEvent", "ControlGroupEvent", "CameraEvent", "HotkeyEvent",
             "UnitBornEvent", "UnitDiedEvent", "UnitDoneEvent", "UnitPositionEvent",
@@ -38,14 +41,14 @@ def guardar_eventos_en_csv(ruta_replay, archivo_csv):
 
         # Recorrer todos los eventos de la repetición
         for event in replay.events:
-            if event.name in eventos_permitidos:
+            # Verificar si el evento tiene un jugador y si el evento está en la lista de eventos permitidos
+            if event.name in eventos_permitidos and hasattr(event, 'player') and event.player and event.player.pid in jugadores:
                 tiempo_evento = timedelta(seconds=event.second)
                 horas = tiempo_evento.seconds // 3600
                 minutos = (tiempo_evento.seconds % 3600) // 60
                 segundos = tiempo_evento.seconds % 60
 
-                jugador = getattr(event, 'player', None)
-                nombre_jugador = jugador.name if jugador else "Sistema"
+                nombre_jugador = jugadores[event.player.pid]
 
                 # Extraer datos específicos para algunos eventos
                 datos_relevantes = {}
