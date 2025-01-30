@@ -1,5 +1,6 @@
 import sc2reader
 import pandas as pd
+import os
 from datetime import timedelta
 import hashlib
 import json
@@ -14,139 +15,104 @@ def calcular_hash_archivo(ruta):
 
 def guardar_eventos_en_csv(ruta_replay, archivo_csv):
     """Extrae eventos específicos de una repetición y los guarda en un archivo CSV."""
-    # Cargar la repetición
-    replay = sc2reader.load_replay(ruta_replay)
+    try:
+        # Cargar la repetición
+        replay = sc2reader.load_replay(ruta_replay)
 
-    # Calcular el ID único de la repetición
-    replay_id = calcular_hash_archivo(ruta_replay)
+        # Calcular el ID único de la repetición
+        replay_id = calcular_hash_archivo(ruta_replay)
 
-    # Lista de tipos de eventos que queremos guardar
-    eventos_permitidos = {
-        # Eventos de jugador (acciones)
-        "CommandEvent",
-        "SelectionEvent",
-        "ControlGroupEvent",
-        "CameraEvent",
-        "HotkeyEvent",
-        # Eventos de unidades
-        "UnitBornEvent",
-        "UnitDiedEvent",
-        "UnitDoneEvent",
-        "UnitPositionEvent",
-        # Eventos de economía
-        "PlayerStatsEvent",
-        # Eventos de combate
-        "UnitAttackEvent",
-        "UnitDamageEvent",
-        "UnitKillEvent",
-        # Eventos de construcción
-        "BuildingConstructionStartEvent",
-        "BuildingConstructionCompleteEvent",
-        "UpgradeCompleteEvent",
-        # Eventos de habilidades
-        "AbilityEvent",
-        # Eventos de juego
-        "GameStartEvent",
-        "GameEndEvent",
-        "PlayerLeaveEvent",
-        # Eventos de chat
-        "ChatEvent",
-        # Eventos de objetivos
-        "TargetPointCommandEvent",
-        "TargetUnitCommandEvent",
-        # Eventos de logística
-        "TrainUnitEvent",
-        "MorphUnitEvent",
-        # Eventos de tecnología
-        "ResearchEvent",
-        # Eventos de logros
-        "AchievementEvent",
-        # Eventos de cámara
-        "CameraSaveEvent",
-        "CameraMoveEvent",
-    }
+        # Lista de tipos de eventos que queremos guardar
+        eventos_permitidos = {
+            "CommandEvent", "SelectionEvent", "ControlGroupEvent", "CameraEvent", "HotkeyEvent",
+            "UnitBornEvent", "UnitDiedEvent", "UnitDoneEvent", "UnitPositionEvent",
+            "PlayerStatsEvent", "UnitAttackEvent", "UnitDamageEvent", "UnitKillEvent",
+            "BuildingConstructionStartEvent", "BuildingConstructionCompleteEvent", "UpgradeCompleteEvent",
+            "AbilityEvent", "GameStartEvent", "GameEndEvent", "PlayerLeaveEvent", "ChatEvent",
+            "TargetPointCommandEvent", "TargetUnitCommandEvent", "TrainUnitEvent", "MorphUnitEvent",
+            "ResearchEvent", "AchievementEvent", "CameraSaveEvent", "CameraMoveEvent"
+        }
 
-    # Lista para almacenar los eventos filtrados
-    eventos_filtrados = []
+        # Lista para almacenar los eventos filtrados
+        eventos_filtrados = []
 
-    # Recorrer todos los eventos de la repetición
-    for event in replay.events:
-        # Verificar si el evento es de un tipo permitido
-        if event.name in eventos_permitidos:
-            # Calcular el tiempo del evento en horas, minutos y segundos
-            tiempo_evento = timedelta(seconds=event.second)
-            horas = tiempo_evento.seconds // 3600
-            minutos = (tiempo_evento.seconds % 3600) // 60
-            segundos = tiempo_evento.seconds % 60
+        # Recorrer todos los eventos de la repetición
+        for event in replay.events:
+            if event.name in eventos_permitidos:
+                tiempo_evento = timedelta(seconds=event.second)
+                horas = tiempo_evento.seconds // 3600
+                minutos = (tiempo_evento.seconds % 3600) // 60
+                segundos = tiempo_evento.seconds % 60
 
-            # Obtener el jugador asociado al evento (si existe)
-            jugador = getattr(event, 'player', None)
-            nombre_jugador = jugador.name if jugador else "Sistema"
+                jugador = getattr(event, 'player', None)
+                nombre_jugador = jugador.name if jugador else "Sistema"
 
-            # Inicializar datos relevantes
-            datos_relevantes = {}
+                # Extraer datos específicos para algunos eventos
+                datos_relevantes = {}
 
-            # Extraer datos relevantes según el tipo de evento
-            if event.name == "PlayerStatsEvent":
-                datos_relevantes = {
-                    "minerales_recolectados": event.minerals_current,
-                    "gas_recolectado": event.vespene_current,
-                    "poblacion_actual": event.food_used,
-                }
-            elif event.name == "UnitDiedEvent":
-                datos_relevantes = {
-                    "unidad_muerta": event.unit.name if hasattr(event, 'unit') and event.unit else "Desconocido",
-                }
-            elif event.name == "UnitBornEvent":
-                datos_relevantes = {
-                    "unidad_nacida": event.unit.name if hasattr(event, 'unit') and event.unit else "Desconocido",
-                }
-            elif event.name == "SelectionEvent":
-                # Extraer nombres de las unidades seleccionadas
-                unidades_seleccionadas = [unit.name for unit in event.new_units] if hasattr(event, 'new_units') else []
-                datos_relevantes = {
-                    "unidades_seleccionadas": unidades_seleccionadas,
-                }
-            elif event.name == "TargetUnitCommandEvent":
-                # Extraer la unidad objetivo del comando (si existe)
-                if hasattr(event, 'target_unit') and event.target_unit:
-                    unidad_objetivo = event.target_unit.name
-                else:
-                    unidad_objetivo = "Desconocido"
-                datos_relevantes = {
-                    "unidad_objetivo": unidad_objetivo,
-                }
-            elif event.name == "TargetPointCommandEvent":
-                # Extraer las coordenadas del punto objetivo (si existen)
-                if hasattr(event, 'target') and event.target:
-                    coordenadas = (event.target.x, event.target.y)
-                else:
-                    coordenadas = (None, None)
-                datos_relevantes = {
-                    "coordenadas_objetivo": coordenadas,
-                }
+                if event.name == "PlayerStatsEvent":
+                    datos_relevantes = {
+                        "minerales_recolectados": event.minerals_current,
+                        "gas_recolectado": event.vespene_current,
+                        "poblacion_actual": event.food_used,
+                    }
+                elif event.name == "UnitDiedEvent":
+                    datos_relevantes = {
+                        "unidad_muerta": event.unit.name if hasattr(event, 'unit') and event.unit else "Desconocido",
+                    }
+                elif event.name == "UnitBornEvent":
+                    datos_relevantes = {
+                        "unidad_nacida": event.unit.name if hasattr(event, 'unit') and event.unit else "Desconocido",
+                    }
+                elif event.name == "SelectionEvent":
+                    unidades_seleccionadas = [unit.name for unit in event.new_units] if hasattr(event, 'new_units') else []
+                    datos_relevantes = {"unidades_seleccionadas": unidades_seleccionadas}
+                elif event.name == "TargetUnitCommandEvent":
+                    unidad_objetivo = event.target_unit.name if hasattr(event, 'target_unit') and event.target_unit else "Desconocido"
+                    datos_relevantes = {"unidad_objetivo": unidad_objetivo}
+                elif event.name == "TargetPointCommandEvent":
+                    coordenadas = (event.target.x, event.target.y) if hasattr(event, 'target') and event.target else (None, None)
+                    datos_relevantes = {"coordenadas_objetivo": coordenadas}
 
-            # Filtrar eventos que no ocurren en el segundo 0
-            if segundos > 0 or minutos > 0 or horas > 0:
-                # Guardar los detalles del evento
-                eventos_filtrados.append({
-                    "id_partida": replay_id,
-                    "evento": event.name,
-                    "jugador": nombre_jugador,
-                    "hora": horas,
-                    "minuto": minutos,
-                    "segundo": segundos,
-                    "datos_relevantes": json.dumps(datos_relevantes)  # Convertir a JSON
-                })
+                # Filtrar eventos que no ocurren en el segundo 0
+                if segundos > 0 or minutos > 0 or horas > 0:
+                    eventos_filtrados.append({
+                        "id_partida": replay_id,
+                        "evento": event.name,
+                        "jugador": nombre_jugador,
+                        "hora": horas,
+                        "minuto": minutos,
+                        "segundo": segundos,
+                        "datos_relevantes": json.dumps(datos_relevantes)
+                    })
 
-    # Convertir la lista de eventos a un DataFrame de pandas
-    df = pd.DataFrame(eventos_filtrados)
+        # Convertir la lista de eventos a un DataFrame de pandas
+        df = pd.DataFrame(eventos_filtrados)
 
-    # Guardar el DataFrame en un archivo CSV
-    df.to_csv(archivo_csv, mode='a', index=False, header=not pd.io.common.file_exists(archivo_csv))
+        # Guardar el DataFrame en un archivo CSV
+        if not os.path.exists(archivo_csv):
+            df.to_csv(archivo_csv, mode='w', index=False)
+        else:
+            df.to_csv(archivo_csv, mode='a', index=False, header=False)
 
-# Ejemplo de uso
-replay_name = "16 pool.SC2Replay"
-ruta_replay = "./replays/"+replay_name
+        print(f"Eventos guardados para {ruta_replay}")
+
+    except Exception as e:
+        print(f"Error procesando {ruta_replay}: {e}")
+
+def procesar_todas_las_replays(directorio_base, archivo_csv):
+    """Recorre todas las subcarpetas en `directorio_base` y procesa cada archivo .SC2Replay."""
+    for root, _, files in os.walk(directorio_base):
+        for file in files:
+            if file.endswith(".SC2Replay"):
+                ruta_replay = os.path.join(root, file)
+                guardar_eventos_en_csv(ruta_replay, archivo_csv)
+
+# Ruta base donde se encuentran las carpetas con repeticiones
+directorio_replays = "./replays"
 archivo_csv = "./csv/eventos_replays.csv"
-guardar_eventos_en_csv(ruta_replay, archivo_csv)
+
+# Procesar todas las repeticiones
+procesar_todas_las_replays(directorio_replays, archivo_csv)
+
+print("Proceso finalizado.")
