@@ -22,10 +22,10 @@ def guardar_eventos_en_csv(ruta_replay, archivo_csv):
         # Calcular el ID único de la repetición
         replay_id = calcular_hash_archivo(ruta_replay)
 
-        # Obtener los jugadores (asumiendo que hay exactamente 2 jugadores)
+        # Obtener los jugadores humanos
         jugadores = {player.pid: player.name for player in replay.players if player.is_human}
 
-        # Lista de eventos a guardar (solo si son realizados por los jugadores)
+        # Lista de eventos a guardar
         eventos_permitidos = {
             "CommandEvent", "SelectionEvent", "ControlGroupEvent", "CameraEvent", "HotkeyEvent",
             "UnitBornEvent", "UnitDiedEvent", "UnitDoneEvent", "UnitPositionEvent",
@@ -41,7 +41,6 @@ def guardar_eventos_en_csv(ruta_replay, archivo_csv):
 
         # Recorrer todos los eventos de la repetición
         for event in replay.events:
-            # Verificar si el evento tiene un jugador y si el evento está en la lista de eventos permitidos
             if event.name in eventos_permitidos and hasattr(event, 'player') and event.player and event.player.pid in jugadores:
                 tiempo_evento = timedelta(seconds=event.second)
                 horas = tiempo_evento.seconds // 3600
@@ -60,22 +59,36 @@ def guardar_eventos_en_csv(ruta_replay, archivo_csv):
                         "poblacion_actual": event.food_used,
                     }
                 elif event.name == "UnitDiedEvent":
-                    datos_relevantes = {
-                        "unidad_muerta": event.unit.name if hasattr(event, 'unit') and event.unit else "Desconocido",
-                    }
+                    if hasattr(event, 'unit') and event.unit:
+                        datos_relevantes = {"unidad_muerta": event.unit.name}
+                    else:
+                        continue  # Ignorar eventos con unidad "Desconocido"
                 elif event.name == "UnitBornEvent":
-                    datos_relevantes = {
-                        "unidad_nacida": event.unit.name if hasattr(event, 'unit') and event.unit else "Desconocido",
-                    }
+                    if hasattr(event, 'unit') and event.unit:
+                        datos_relevantes = {"unidad_nacida": event.unit.name}
+                    else:
+                        continue
                 elif event.name == "SelectionEvent":
-                    unidades_seleccionadas = [unit.name for unit in event.new_units] if hasattr(event, 'new_units') else []
-                    datos_relevantes = {"unidades_seleccionadas": unidades_seleccionadas}
+                    if hasattr(event, 'new_units') and event.new_units:
+                        datos_relevantes = {
+                            "unidades_seleccionadas": [unit.name for unit in event.new_units]
+                        }
+                    else:
+                        continue
                 elif event.name == "TargetUnitCommandEvent":
-                    unidad_objetivo = event.target_unit.name if hasattr(event, 'target_unit') and event.target_unit else "Desconocido"
-                    datos_relevantes = {"unidad_objetivo": unidad_objetivo}
+                    if hasattr(event, 'target_unit') and event.target_unit:
+                        datos_relevantes = {"unidad_objetivo": event.target_unit.name}
+                    else:
+                        continue  # Ignorar eventos sin unidad objetivo
                 elif event.name == "TargetPointCommandEvent":
-                    coordenadas = (event.target.x, event.target.y) if hasattr(event, 'target') and event.target else (None, None)
-                    datos_relevantes = {"coordenadas_objetivo": coordenadas}
+                    if hasattr(event, 'target') and event.target:
+                        datos_relevantes = {"coordenadas_objetivo": [event.target.x, event.target.y]}
+                    else:
+                        continue  # Ignorar eventos sin coordenadas válidas
+
+                # **Evitar registros vacíos**: No guardar si `datos_relevantes` está vacío (`{}`)
+                if not datos_relevantes:
+                    continue
 
                 # Filtrar eventos que no ocurren en el segundo 0
                 if segundos > 0 or minutos > 0 or horas > 0:
@@ -89,16 +102,16 @@ def guardar_eventos_en_csv(ruta_replay, archivo_csv):
                         "datos_relevantes": json.dumps(datos_relevantes)
                     })
 
-        # Convertir la lista de eventos a un DataFrame de pandas
-        df = pd.DataFrame(eventos_filtrados)
+        # **Evitar insertar eventos vacíos en CSV**
+        if eventos_filtrados:
+            df = pd.DataFrame(eventos_filtrados)
 
-        # Guardar el DataFrame en un archivo CSV
-        if not os.path.exists(archivo_csv):
-            df.to_csv(archivo_csv, mode='w', index=False)
-        else:
-            df.to_csv(archivo_csv, mode='a', index=False, header=False)
+            if not os.path.exists(archivo_csv):
+                df.to_csv(archivo_csv, mode='w', index=False)
+            else:
+                df.to_csv(archivo_csv, mode='a', index=False, header=False)
 
-        print(f"Eventos guardados para {ruta_replay}")
+            print(f"Eventos guardados para {ruta_replay}")
 
     except Exception as e:
         print(f"Error procesando {ruta_replay}: {e}")
